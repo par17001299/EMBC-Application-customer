@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>EMBC Banking App</title>
+    <style>
+        :root{
+            --bg:#f4f7fb; --card:#fff; --accent:#1e90ff; --muted:#6b7280;
+            --danger:#e53e3e;
+            font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+        }
+        body{
+            margin:0; background:var(--bg); color:#0f172a;
+        }
+        .container{
+            max-width:1100px; margin:32px auto; padding:20px;
+        }
+        header{
+            display:flex; justify-content:space-between; align-items:center; gap:16px;
+            margin-bottom:18px;
+        }
+        .brand{display:flex; align-items:center; gap:12px;}
+        .logo{
+            width:48px; height:48px; border-radius:10px; background:linear-gradient(135deg,var(--accent),#6ec1ff);
+            display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700;
+        }
+        nav{display:flex; gap:12px; align-items:center;}
+        nav a{color:var(--muted); text-decoration:none; padding:6px 10px; border-radius:8px;}
+        nav a.active{background:#eef6ff; color:var(--accent); font-weight:600;}
+        .grid{
+            display:grid; gap:16px; grid-template-columns: 1fr 360px;
+        }
+        .card{background:var(--card); padding:16px; border-radius:12px; box-shadow:0 1px 3px rgba(16,24,40,.04);}
+        .account-summary{display:flex; justify-content:space-between; align-items:center; gap:12px;}
+        .balance{font-size:20px; font-weight:700;}
+        .small{color:var(--muted); font-size:13px;}
+        ul.txns{list-style:none; padding:0; margin:0;}
+        ul.txns li{display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #f1f5f9;}
+        .actions{display:flex; flex-direction:column; gap:12px;}
+        label{display:block; font-size:13px; color:var(--muted); margin-bottom:6px;}
+        input, select{width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; font-size:14px; background:#fff;}
+        button{cursor:pointer; background:var(--accent); color:#fff; padding:10px 12px; border-radius:8px; border:0; font-weight:600;}
+        button.ghost{background:#f1f5f9; color:var(--muted);}
+        .muted{color:var(--muted); font-size:13px;}
+        .section-title{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;}
+        .badge{background:#f1f5ff; color:var(--accent); padding:6px 10px; border-radius:999px; font-weight:600; font-size:13px;}
+        /* Login screen styles */
+        .login-screen{
+            position:fixed;
+            inset:0;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            /* block out background with solid colour #005ff3 */
+            background:#005ff3;
+            z-index:60;
+            /* ensure overlay text is centered */
+            text-align:center;
+        }
+        .login-card{
+            width:360px;
+            background:var(--card);
+            padding:20px;
+            border-radius:12px;
+            box-shadow:0 8px 30px rgba(2,6,23,0.15);
+            /* center all text inside the card */
+            text-align:center;
+        }
+        /* Recovery modal */
+        .recovery-screen{
+            position:fixed;
+            inset:0;
+            display:none;
+            align-items:center;
+            justify-content:center;
+            background:rgba(0,0,0,0.55);
+            z-index:9999; /* ensure sits above the login overlay */
+            pointer-events:auto;
+        }
+        .recovery-card{
+            width:420px;
+            max-width:92%;
+            background:var(--card);
+            padding:18px;
+            border-radius:12px;
+            box-shadow:0 12px 40px rgba(2,6,23,0.25);
+            text-align:left;
+        }
+        .recovery-card h3{ margin:0 0 8px 0; }
+        .recovery-row{ display:flex; gap:8px; align-items:center; }
+        .recovery-footer{ display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+        .recovery-error{ color:var(--danger); font-size:13px; margin-top:8px; }
+        .recovery-success{ color:green; font-size:13px; margin-top:8px; }
+        /* Payments dropdown */
+        .nav-dropdown{
+            position:absolute;
+            top:calc(100% + 8px);
+            left:0;
+            display:none;
+            min-width:200px;
+            background:var(--card);
+            border-radius:8px;
+            box-shadow:0 8px 24px rgba(2,6,23,0.12);
+            padding:8px;
+            z-index:1200;
+        }
+        .nav-dropdown.show{ display:block; }
+        .nav-dropdown button{
+            display:block;
+            width:100%;
+            text-align:left;
+            background:transparent;
+            border:0;
+            padding:10px 12px;
+            border-radius:6px;
+            cursor:pointer;
+            font-size:14px;
+            color:inherit;
+        }
+        .nav-dropdown button:hover{ background:#f1f5f9; }
+         @media (max-width:900px){
+             .grid{grid-template-columns:1fr; }
+             header{flex-direction:column; align-items:flex-start; gap:8px;}
+         }
+     </style>
+</head>
+<body>
+    <!-- Login screen (shows until user logs in) -->
+    <div id="login-screen" class="login-screen" role="dialog" aria-modal="true" aria-labelledby="login-heading">
+        <div class="login-card" role="document">
+            <h2 id="login-heading">Sign in to EMBC</h2>
+            <div class="small" style="margin-bottom:12px;">Demo login — enter any username and password</div>
+            <form id="login-form" onsubmit="event.preventDefault(); doLogin();">
+                <label for="login-username">Username</label>
+                <input id="login-username" autocomplete="username" required />
+                <label for="login-password" style="margin-top:8px;">Password</label>
+                <input id="login-password" type="password" autocomplete="current-password" required />
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button type="submit">Sign In</button>
+                    <button type="button" class="ghost" onclick="prefillDemo()">Demo</button>
+                </div>
+                <div class="login-footer">
+                    <div class="muted">Secure sign-in • Demo only</div>
+                    <div style="font-size:13px;">
+                        <button type="button" id="forgot-btn" class="ghost" onclick="openRecovery()" aria-haspopup="dialog">Forgot?</button>
+                    </div>
+                 </div>
+             </form>
+         </div>
+     </div>
+
+    <!-- Password recovery modal -->
+    <div id="recovery-screen" class="recovery-screen" role="dialog" aria-modal="true" aria-labelledby="recovery-heading">
+        <div class="recovery-card" role="document">
+            <h3 id="recovery-heading">Password recovery</h3>
+            <div class="small" style="margin-bottom:10px;">Enter the email and account number associated with your account. We'll send instructions to your email (demo).</div>
+            <form id="recovery-form" onsubmit="event.preventDefault(); submitRecovery();">
+                <label for="rec-email">Email address</label>
+                <input id="rec-email" type="email" autocomplete="email" required />
+                <label for="rec-account" style="margin-top:8px;">Account number</label>
+                <input id="rec-account" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="e.g. 12345678" required />
+                <div id="rec-msg" class="muted" style="margin-top:10px;"></div>
+                <div class="recovery-footer">
+                    <div>
+                        <button type="submit">Send reset</button>
+                        <button type="button" class="ghost" onclick="closeRecovery()">Cancel</button>
+                    </div>
+                    <div style="font-size:13px;" id="rec-status"></div>
+                </div>
+                <div id="rec-error" class="recovery-error" aria-live="polite"></div>
+                <div id="rec-success" class="recovery-success" aria-live="polite"></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="container" id="app-root" aria-hidden="true">
+        <header>
+            <div class="brand">
+                <div class="logo">SB</div>
+                <div>
+                    <div style="font-weight:700;">East Midlands Banking Corporation</div>
+                    <div class="small">Personal Banking • Secure • Fast</div>
+                </div>
+            </div>
+            <nav style="display:flex; align-items:center; gap:12px;">
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <a href="#" id="nav-dashboard" class="active" onclick="showDashboard(event)">Dashboard</a>
+                    <a href="#" id="nav-accounts" onclick="showAccounts(event)">Accounts</a>
+                    <!-- Payments dropdown -->
+                    <div style="position:relative;">
+                        <button id="payments-btn" class="ghost" type="button" onclick="togglePaymentsMenu(event)"
+                                aria-haspopup="true" aria-expanded="false">Payments ▾</button>
+                        <div id="payments-menu" class="nav-dropdown" role="menu" aria-hidden="true">
+                            <button role="menuitem" onclick="showRecurringPayments()">Recurring payments</button>
+                            <button role="menuitem" onclick="showOneOffPayments()">One‑off payments</button>
+                        </div>
+                    </div>
+                    <a href="#">Support</a>
+                 </div>
+                 <!-- User area (populated after login) -->
+                 <div id="user-area" class="user-area" style="margin-left:12px; display:none;">
+                     <div class="small">Hi, <span id="user-name" class="user-name">User</span></div>
+                     <button class="ghost" onclick="doLogout()">Logout</button>
+                 </div>
+             </nav>
+        </header>
+
+        <div class="grid" id="main-grid">
+            <!-- Main column -->
+            <div>
+                <section class="card" aria-labelledby="summary-heading">
+                    <div class="section-title">
+                        <h2 id="summary-heading" style="margin:0;">Account Summary</h2>
+                        <div class="badge" id="account-type">Checking</div>
+                    </div>
+                    <div class="account-summary">
+                        <div>
+                            <div class="small">Available Balance</div>
+                            <div class="balance" id="balance">$5,250.00</div>
+                            <div class="muted">Acct •••• 1234</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div class="small">Last login</div>
+                            <div class="muted" id="last-login">Today • 09:15 AM</div>
+                            <div style="height:12px;"></div>
+                            <button class="ghost" onclick="downloadStatement()">Download PDF</button>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card" aria-labelledby="transactions-heading" style="margin-top:16px;">
+                    <div class="section-title">
+                        <h2 id="transactions-heading" style="margin:0;">Recent Transactions</h2>
+                        <div class="small">Showing 5 most recent</div>
+                    </div>
+                    <ul class="txns" id="txn-list">
+                        <!-- transactions populated by JS -->
+                    </ul>
+                    <div style="margin-top:12px; text-align:center;">
+                        <button class="ghost" onclick="loadMore()">View All Transactions</button>
+                    </div>
+                </section>
+
+                <section class="card" aria-labelledby="transfer-heading" style="margin-top:16px;">
+                    <div class="section-title">
+                        <h2 id="transfer-heading" style="margin:0;">Transfer Funds</h2>
+                        <div class="small">Move money between accounts</div>
+                    </div>
+
+                    <form id="transfer-form" onsubmit="event.preventDefault(); doTransfer();">
+                        <div style="display:grid; gap:8px; grid-template-columns:1fr 1fr;">
+                            <div>
+                                <label for="from">From</label>
+                                <select id="from">
+                                    <option value="checking">Checking •••• 1234</option>
+                                    <option value="savings">Savings •••• 5678</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="to">To</label>
+                                <select id="to">
+                                    <option value="savings">Savings •••• 5678</option>
+                                    <option value="checking">Checking •••• 1234</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display:grid; gap:8px; grid-template-columns:1fr 120px; margin-top:10px;">
+                            <div>
+                                <label for="amount">Amount</label>
+                                <input id="amount" type="number" min="0.01" step="0.01" placeholder="0.00" required />
+                            </div>
+                            <div>
+                                <label for="when">When</label>
+                                <select id="when">
+                                    <option value="now">Now</option>
+                                    <option value="schedule">Schedule</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div style="display:flex; gap:8px; margin-top:12px;">
+                            <button type="submit">Send Transfer</button>
+                            <button type="button" class="ghost" onclick="document.getElementById('transfer-form').reset()">Reset</button>
+                        </div>
+                        <div id="transfer-msg" class="muted" style="margin-top:8px;"></div>
+                    </form>
+                </section>
+
+                <section class="card" aria-labelledby="bills-heading" style="margin-top:16px;">
+                    <div class="section-title">
+                        <h2 id="bills-heading" style="margin:0;">Pay Bills</h2>
+                        <div class="small">Pay utilities, credit cards, and more</div>
+                    </div>
+                    <div class="actions">
+                        <div>
+                            <label for="payee">Select Payee</label>
+                            <select id="payee">
+                                <option>Electric Company</option>
+                                <option>Water Utility</option>
+                                <option>Credit Card</option>
+                                <option>Internet Provider</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <input id="bill-amount" type="number" placeholder="Amount" />
+                            <button onclick="payBill()">Pay</button>
+                        </div>
+                        <div id="bill-msg" class="muted"></div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- Sidebar -->
+            <aside>
+                <section class="card" aria-labelledby="cards-heading">
+                    <div class="section-title">
+                        <h3 id="cards-heading" style="margin:0;">Cards</h3>
+                        <div class="small">Manage cards</div>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-weight:700;">Visa •••• 8901</div>
+                                <div class="small">Expires 12/26</div>
+                            </div>
+                            <div><button class="ghost" onclick="toggleCard()">Freeze</button></div>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card" style="margin-top:16px;" aria-labelledby="alerts-heading">
+                    <div class="section-title">
+                        <h3 id="alerts-heading" style="margin:0;">Alerts</h3>
+                        <div class="small">Security & notifications</div>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <div class="muted">No alerts. All good.</div>
+                    </div>
+                </section>
+
+                <section class="card" style="margin-top:16px;" aria-labelledby="support-heading">
+                    <div class="section-title">
+                        <h3 id="support-heading" style="margin:0;">Support</h3>
+                        <div class="small">Help & contact</div>
+                    </div>
+                    <div style="margin-top:12px;">
+                        <div class="muted">Chat with us or call 1-800-555-0100</div>
+                        <div style="margin-top:8px;">
+                            <button class="ghost" onclick="openChat()">Contact Support</button>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </div>
+
+        <!-- Accounts management page (hidden by default) -->
+        <section id="accounts-page" class="card" style="display:none; margin-top:16px;">
+            <div class="section-title">
+                <h2 style="margin:0;">Accounts & Personal Settings</h2>
+                <div class="small">Manage cards, personal details and contact information</div>
+            </div>
+
+            <!-- Cards management -->
+            <div style="margin-top:12px;">
+                <h3 style="margin:0 0 8px 0;">Your Cards</h3>
+                <div id="cards-list" style="display:flex; flex-direction:column; gap:8px; margin-top:8px;"></div>
+                <div style="display:flex; gap:8px; margin-top:10px;">
+                    <input id="new-card-last4" placeholder="Last 4 digits" maxlength="4" style="width:140px;" />
+                    <select id="new-card-type" style="width:160px;">
+                        <option value="Visa">Visa</option>
+                        <option value="Mastercard">Mastercard</option>
+                    </select>
+                    <button onclick="addCard()">Add Card</button>
+                </div>
+                <div id="cards-msg" class="muted" style="margin-top:8px;"></div>
+            </div>
+
+            <hr style="margin:16px 0;" />
+
+            <!-- Personal details -->
+            <div style="margin-top:8px;">
+                <h3 style="margin:0 0 8px 0;">Personal Details</h3>
+                <form id="personal-form" onsubmit="event.preventDefault(); savePersonal();">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div>
+                            <label for="first-name">First name</label>
+                            <input id="first-name" />
+                        </div>
+                        <div>
+                            <label for="last-name">Last name</label>
+                            <input id="last-name" />
+                        </div>
+                    </div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+                        <div>
+                            <label for="dob">Date of birth</label>
+                            <input id="dob" type="date" />
+                        </div>
+                        <div>
+                            <label for="occupation">Occupation</label>
+                            <input id="occupation" />
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button type="submit">Save personal details</button>
+                        <button type="button" class="ghost" onclick="resetPersonal()">Reset</button>
+                    </div>
+                    <div id="personal-msg" class="muted" style="margin-top:8px;"></div>
+                </form>
+            </div>
+
+            <hr style="margin:16px 0;" />
+
+            <!-- Contact details -->
+            <div style="margin-top:8px;">
+                <h3 style="margin:0 0 8px 0;">Contact Details</h3>
+                <form id="contact-form" onsubmit="event.preventDefault(); saveContact();">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <div>
+                            <label for="contact-email">Email</label>
+                            <input id="contact-email" type="email" />
+                        </div>
+                        <div>
+                            <label for="contact-phone">Phone</label>
+                            <input id="contact-phone" type="tel" />
+                        </div>
+                    </div>
+                    <div style="margin-top:8px;">
+                        <label for="contact-address">Address</label>
+                        <input id="contact-address" />
+                    </div>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button type="submit">Save contact details</button>
+                        <button type="button" class="ghost" onclick="resetContact()">Reset</button>
+                    </div>
+                    <div id="contact-msg" class="muted" style="margin-top:8px;"></div>
+                </form>
+            </div>
+        </section>
+     </div>
+
+    <script>
+        // Initial state
+        const ACCOUNTS_STORAGE_KEY = 'embc_accounts_state_v1';
+        let accountsState = {
+            cards: [
+                { id: 'c1', type: 'Visa', last4: '8901', frozen: false, expires: '12/26' },
+                { id: 'c2', type: 'Mastercard', last4: '2345', frozen: false, expires: '09/25' }
+            ],
+            personal: { firstName: '', lastName: '', dob: '', occupation: '' },
+            contact: { email: '', phone: '', address: '' }
+        };
+        let balance = 5250.00;
+        const txns = [
+            {date:'2026-01-12', desc:'Grocery Store', amount:-74.32},
+            {date:'2026-01-11', desc:'Paycheck', amount:2500.00},
+            {date:'2026-01-10', desc:'Coffee Shop', amount:-5.60},
+            {date:'2026-01-08', desc:'Rent', amount:-1200.00},
+            {date:'2026-01-05', desc:'Electric Bill', amount:-95.20}
+        ];
+
+        function formatMoney(v){
+            return (v<0?'-':'') + '$' + Math.abs(v).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+        }
+
+        function renderTxns(){
+            const ul = document.getElementById('txn-list');
+            ul.innerHTML = '';
+            txns.slice(0,5).forEach(t=>{
+                const li = document.createElement('li');
+                li.innerHTML = '<div><div style="font-weight:600;">'+t.desc+'</div><div class="small">'+t.date+'</div></div><div style="text-align:right;"><div style="font-weight:600;">'+formatMoney(t.amount)+'</div></div>';
+                ul.appendChild(li);
+            });
+            document.getElementById('balance').textContent = formatMoney(balance);
+        }
+
+        function doTransfer(){
+            const from = document.getElementById('from').value;
+            const to = document.getElementById('to').value;
+            const amount = parseFloat(document.getElementById('amount').value);
+            const msg = document.getElementById('transfer-msg');
+            if(!amount || amount <= 0){ msg.textContent = 'Enter a valid amount.'; return; }
+            if(from === to){ msg.textContent = 'Select different source and destination accounts.'; return; }
+            // simulate: if transferring out of checking, reduce balance, else increase
+            if(from === 'checking'){
+                if(amount > balance){ msg.textContent = 'Insufficient funds.'; return; }
+                balance -= amount;
+                txns.unshift({date:new Date().toISOString().slice(0,10), desc:'Transfer to '+to, amount:-amount});
+            } else {
+                balance += amount;
+                txns.unshift({date:new Date().toISOString().slice(0,10), desc:'Transfer from '+from, amount:amount});
+            }
+            msg.textContent = 'Transfer queued successfully.';
+            document.getElementById('transfer-form').reset();
+            renderTxns();
+            setTimeout(()=> msg.textContent='', 4000);
+        }
+
+        function payBill(){
+            const payee = document.getElementById('payee').value;
+            const amount = parseFloat(document.getElementById('bill-amount').value);
+            const msg = document.getElementById('bill-msg');
+            if(!amount || amount <= 0){ msg.textContent = 'Enter an amount.'; return; }
+            if(amount > balance){ msg.textContent = 'Insufficient funds to pay bill.'; return; }
+            balance -= amount;
+            txns.unshift({date:new Date().toISOString().slice(0,10), desc:'Bill Payment - '+payee, amount:-amount});
+            msg.textContent = 'Bill paid: '+formatMoney(amount);
+            document.getElementById('bill-amount').value = '';
+            renderTxns();
+            setTimeout(()=> msg.textContent = '', 4000);
+        }
+
+        function toggleCard(){
+            alert('Card frozen/unfrozen (simulated).');
+        }
+
+        function downloadStatement(){
+            alert('Download statement feature simulated in this demo.');
+        }
+
+        function openChat(){
+            alert('Opening support chat (simulated).');
+        }
+
+        function loadMore(){
+            alert('Open full transactions view (simulated).');
+        }
+
+        // ---- Login / Logout logic ----
+        function showAppForUser(username){
+            document.getElementById('user-name').textContent = username;
+            document.getElementById('user-area').style.display = 'flex';
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('app-root').setAttribute('aria-hidden','false');
+            // set last login text to now for demo
+            document.getElementById('last-login').textContent = new Date().toLocaleString();
+            // persist small demo state
+            try{ localStorage.setItem('demoUser', username); }catch(e){}
+        }
+
+        function doLogin(){
+            const u = document.getElementById('login-username').value.trim();
+            const p = document.getElementById('login-password').value;
+            if(!u || !p){ alert('Enter username and password.'); return; }
+            // For demo, accept any credentials. In real app validate on server.
+            showAppForUser(u);
+        }
+
+        function doLogout(){
+            document.getElementById('login-username').value = '';
+            document.getElementById('login-password').value = '';
+            document.getElementById('user-area').style.display = 'none';
+            document.getElementById('app-root').setAttribute('aria-hidden','true');
+            document.getElementById('login-screen').style.display = 'flex';
+            try{ localStorage.removeItem('demoUser'); }catch(e){}
+        }
+
+        function prefillDemo(){
+            document.getElementById('login-username').value = 'demo';
+            document.getElementById('login-password').value = 'demo';
+        }
+
+        // If a demo user stored, sign them in automatically
+        (function init(){
+            renderTxns();
+            try{
+                const u = localStorage.getItem('demoUser');
+                if(u){
+                    showAppForUser(u);
+                } else {
+                    // leave login shown (default)
+                }
+                // load accounts state (if any)
+                try{
+                    const raw = localStorage.getItem(ACCOUNTS_STORAGE_KEY);
+                    if(raw) accountsState = Object.assign(accountsState, JSON.parse(raw));
+                }catch(e){}
+                renderCards();
+                loadPersonalToForm();
+                loadContactToForm();
+            }catch(e){
+                // ignore storage errors
+            }
+        })();
+        // -------- Accounts page functions --------
+        function showAccounts(e){
+            if(e && e.preventDefault) e.preventDefault();
+            // set nav active
+            document.getElementById('nav-dashboard').classList.remove('active');
+            document.getElementById('nav-accounts').classList.add('active');
+            // hide main grid, show accounts
+            document.getElementById('main-grid').style.display = 'none';
+            document.getElementById('accounts-page').style.display = 'block';
+        }
+
+        function showDashboard(e){
+            if(e && e.preventDefault) e.preventDefault();
+            document.getElementById('nav-accounts').classList.remove('active');
+            document.getElementById('nav-dashboard').classList.add('active');
+            document.getElementById('accounts-page').style.display = 'none';
+            document.getElementById('main-grid').style.display = '';
+        }
+
+        function persistAccounts(){
+            try{ localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(accountsState)); }catch(e){}
+        }
+
+        // Cards
+        function renderCards(){
+            const list = document.getElementById('cards-list');
+            list.innerHTML = '';
+            accountsState.cards.forEach(c=>{
+                const row = document.createElement('div');
+                row.style.display = 'flex';
+                row.style.justifyContent = 'space-between';
+                row.style.alignItems = 'center';
+                row.style.gap = '8px';
+                row.innerHTML = '<div><div style="font-weight:700;">'+c.type+' •••• '+c.last4+'</div><div class="small">Expires '+c.expires+'</div></div>';
+                const actions = document.createElement('div');
+                const freezeBtn = document.createElement('button');
+                freezeBtn.className = 'ghost';
+                freezeBtn.textContent = c.frozen ? 'Unfreeze' : 'Freeze';
+                freezeBtn.onclick = ()=>{ c.frozen = !c.frozen; persistAccounts(); renderCards(); };
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'ghost';
+                removeBtn.textContent = 'Remove';
+                removeBtn.onclick = ()=>{ accountsState.cards = accountsState.cards.filter(x=>x.id!==c.id); persistAccounts(); renderCards(); };
+                actions.appendChild(freezeBtn);
+                actions.appendChild(removeBtn);
+                row.appendChild(actions);
+                list.appendChild(row);
+            });
+        }
+
+        function addCard(){
+            const last4 = document.getElementById('new-card-last4').value.trim();
+            const type = document.getElementById('new-card-type').value;
+            const msg = document.getElementById('cards-msg');
+            msg.textContent = '';
+            if(!/^\d{4}$/.test(last4)){ msg.textContent = 'Enter last 4 digits.'; return; }
+            const id = 'c' + Date.now();
+            accountsState.cards.push({ id, type, last4, frozen:false, expires: '12/29' });
+            persistAccounts();
+            renderCards();
+            document.getElementById('new-card-last4').value = '';
+            msg.textContent = 'Card added (simulated).';
+            setTimeout(()=> msg.textContent = '', 3000);
+        }
+
+        // Personal details
+        function loadPersonalToForm(){
+            const p = accountsState.personal || {};
+            document.getElementById('first-name').value = p.firstName || '';
+            document.getElementById('last-name').value = p.lastName || '';
+            document.getElementById('dob').value = p.dob || '';
+            document.getElementById('occupation').value = p.occupation || '';
+        }
+
+        function savePersonal(){
+            const p = {
+                firstName: document.getElementById('first-name').value.trim(),
+                lastName: document.getElementById('last-name').value.trim(),
+                dob: document.getElementById('dob').value,
+                occupation: document.getElementById('occupation').value.trim()
+            };
+            accountsState.personal = p;
+            persistAccounts();
+            const msg = document.getElementById('personal-msg');
+            msg.textContent = 'Personal details saved.';
+            setTimeout(()=> msg.textContent = '', 3000);
+        }
+
+        function resetPersonal(){
+            loadPersonalToForm();
+            document.getElementById('personal-msg').textContent = 'Changes reverted.';
+            setTimeout(()=> document.getElementById('personal-msg').textContent = '', 2000);
+        }
+
+        // Contact details
+        function loadContactToForm(){
+            const c = accountsState.contact || {};
+            document.getElementById('contact-email').value = c.email || '';
+            document.getElementById('contact-phone').value = c.phone || '';
+            document.getElementById('contact-address').value = c.address || '';
+        }
+
+        function saveContact(){
+            const email = document.getElementById('contact-email').value.trim();
+            const phone = document.getElementById('contact-phone').value.trim();
+            const address = document.getElementById('contact-address').value.trim();
+            const msg = document.getElementById('contact-msg');
+            msg.textContent = '';
+            if(email && !/^\S+@\S+\.\S+$/.test(email)){ msg.textContent = 'Enter a valid email.'; return; }
+            accountsState.contact = { email, phone, address };
+            persistAccounts();
+            msg.textContent = 'Contact details saved.';
+            setTimeout(()=> msg.textContent = '', 3000);
+        }
+
+        function resetContact(){
+            loadContactToForm();
+            const msg = document.getElementById('contact-msg');
+            msg.textContent = 'Changes reverted.';
+            setTimeout(()=> msg.textContent = '', 2000);
+        }
+        // -------- end accounts --------
+        // Password recovery handlers
+        function openRecovery(){
+            console.log('openRecovery called');
+             document.getElementById('rec-error').textContent = '';
+             document.getElementById('rec-success').textContent = '';
+             document.getElementById('rec-msg').textContent = '';
+             document.getElementById('rec-status').textContent = '';
+             try { document.getElementById('recovery-form').reset(); } catch(e){}
+             const screen = document.getElementById('recovery-screen');
+             if(screen){
+                 // ensure modal is at end of <body> (avoids stacking context issues)
+                 try { document.body.appendChild(screen); } catch(e){}
+                 screen.style.display = 'flex';
+                 // visually and interactively disable the login overlay underneath
+                 const login = document.getElementById('login-screen');
+                 if(login){
+                     login.setAttribute('aria-hidden','true');
+                     login.style.pointerEvents = 'none';
+                     login.style.filter = 'brightness(.7)';
+                 }
+                 // focus first input
+                 const el = document.getElementById('rec-email');
+                 if(el) setTimeout(()=> el.focus(), 50);
+             }
+         }
+
+        function closeRecovery(){
+            const screen = document.getElementById('recovery-screen');
+            if(screen) screen.style.display = 'none';
+            const login = document.getElementById('login-screen');
+            if(login){
+                login.removeAttribute('aria-hidden');
+                login.style.pointerEvents = '';
+                login.style.filter = '';
+            }
+        }
+
+        function submitRecovery(){
+            const email = document.getElementById('rec-email').value.trim();
+            const acct = document.getElementById('rec-account').value.trim();
+            const errEl = document.getElementById('rec-error');
+            const successEl = document.getElementById('rec-success');
+            const statusEl = document.getElementById('rec-status');
+            errEl.textContent = ''; successEl.textContent = ''; statusEl.textContent = '';
+ 
+            if(!email || !/^\S+@\S+\.\S+$/.test(email)){
+                errEl.textContent = 'Enter a valid email address.';
+                return;
+            }
+            if(!acct || !/^\d{6,12}$/.test(acct)){
+                errEl.textContent = 'Enter a valid account number (6–12 digits).';
+                return;
+            }
+ 
+            statusEl.textContent = 'Sending...';
+            // simulate async server call
+            setTimeout(()=>{
+                statusEl.textContent = '';
+                successEl.textContent = 'Recovery instructions sent to ' + email + ' (demo).';
+                // close after a short delay
+                setTimeout(()=> closeRecovery(), 2000);
+            }, 1000);
+        }
+ 
+        // Popover for Forgot? button
+        function showForgotPopup(e){
+            e.stopPropagation();
+            const pop = document.getElementById('forgot-pop');
+            const btn = e.currentTarget || e.target;
+            if(!pop || !btn) return;
+            // position popover near button
+            const rect = btn.getBoundingClientRect();
+            const left = Math.max(8, rect.left + rect.width/2 - 110);
+            const top = rect.bottom + 8;
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            pop.classList.add('show');
+            pop.setAttribute('aria-hidden','false');
+        }
+
+        // close popover when clicking outside or pressing Escape
+         document.addEventListener('click', function(e){
+             const pop = document.getElementById('forgot-pop');
+             if(!pop) return;
+             if(pop.classList.contains('show') && !pop.contains(e.target) && e.target.id !== 'forgot-btn'){
+                 pop.classList.remove('show');
+                 pop.setAttribute('aria-hidden','true');
+             }
+         });
+         document.addEventListener('keydown', function(e){
+             const pop = document.getElementById('forgot-pop');
+             if(!pop) return;
+             if(e.key === 'Escape'){
+                 pop.classList.remove('show');
+                 pop.setAttribute('aria-hidden','true');
+             }
+         });
+
+        // Payments dropdown handlers
+        function togglePaymentsMenu(e){
+            e.stopPropagation();
+            const menu = document.getElementById('payments-menu');
+            const btn = document.getElementById('payments-btn');
+            if(!menu || !btn) return;
+            const showing = menu.classList.contains('show');
+            if(showing){
+                menu.classList.remove('show');
+                menu.setAttribute('aria-hidden','true');
+                btn.setAttribute('aria-expanded','false');
+            } else {
+                menu.classList.add('show');
+                menu.setAttribute('aria-hidden','false');
+                btn.setAttribute('aria-expanded','true');
+            }
+        }
+
+        function closePaymentsMenu(){
+            const menu = document.getElementById('payments-menu');
+            const btn = document.getElementById('payments-btn');
+            if(menu){
+                menu.classList.remove('show');
+                menu.setAttribute('aria-hidden','true');
+            }
+            if(btn) btn.setAttribute('aria-expanded','false');
+        }
+
+        function showRecurringPayments(){
+            closePaymentsMenu();
+            // replace with real navigation / view code as needed
+            alert('Open Recurring Payments (simulated).');
+        }
+
+        function showOneOffPayments(){
+            closePaymentsMenu();
+            // replace with real navigation / view code as needed
+            alert('Open One‑off Payments (simulated).');
+        }
+
+        // close payments menu when clicking elsewhere or pressing Escape
+        document.addEventListener('click', function(e){
+            const menu = document.getElementById('payments-menu');
+            const btn = document.getElementById('payments-btn');
+            if(!menu || !menu.classList.contains('show')) return;
+            if(e.target === btn) return;
+            if(!menu.contains(e.target)) closePaymentsMenu();
+        });
+        document.addEventListener('keydown', function(e){
+            if(e.key === 'Escape') closePaymentsMenu();
+        });
+ // allow clicking outside the card or pressing Escape to close
+         document.addEventListener('click', function eve(e){
+             const screen = document.getElementById('recovery-screen');
+             if(!screen || screen.style.display !== 'flex') return;
+             const card = document.querySelector('.recovery-card');
+             // if click is outside the card, close modal
+             if(card && !card.contains(e.target)) closeRecovery();
+         });
+         document.addEventListener('keydown', function ke(e){
+             if(e.key === 'Escape') closeRecovery();
+         });
+ // -------------------------------
+ 
+     </script>
+ </body>
+ </html>
